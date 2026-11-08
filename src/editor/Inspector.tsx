@@ -41,7 +41,8 @@ export function Inspector() {
         ))}
       </ul>
       <p className="hint">
-        Click to select · Shift+click to add · Drag to move · Ctrl+Z / Ctrl+Shift+Z undo / redo
+        Click to select · Shift+click to add · Drag empty space to marquee · Arrows nudge 1px, Shift+Arrows 10px ·
+        Ctrl+Z / Ctrl+Shift+Z undo / redo
       </p>
     </aside>
   )

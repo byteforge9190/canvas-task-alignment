@@ -1,13 +1,18 @@
 import { useEffect, useRef } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
-import { boundsOf } from './geometry'
+import { boundsOf, normalizeRect } from './geometry'
 import { CANVAS_HEIGHT, CANVAS_WIDTH } from './seed'
 import { editorStore, useEditor } from './store'
 import type { Shape } from './types'
 
 type Point = { x: number; y: number }
 
-type Gesture = { kind: 'drag'; last: Point; moved: boolean }
+type Gesture =
+  | { kind: 'drag'; last: Point; moved: boolean }
+  | { kind: 'marquee'; start: Point; additive: boolean }
+
+/** A marquee only starts once the pointer has moved this far, so plain clicks stay clicks. */
+const MARQUEE_THRESHOLD = 2
 
 function hitTest(shapes: Shape[], p: Point): Shape | undefined {
   for (let i = shapes.length - 1; i >= 0; i--) {
@@ -24,7 +29,7 @@ function hitTest(shapes: Shape[], p: Point): Shape | undefined {
 }
 
 function draw(ctx: CanvasRenderingContext2D) {
-  const { shapes, selectedIds } = editorStore.getState()
+  const { shapes, selectedIds, marquee } = editorStore.getState()
   ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT)
 
   ctx.strokeStyle = '#2a2f3a'
@@ -63,7 +68,15 @@ function draw(ctx: CanvasRenderingContext2D) {
     ctx.setLineDash([])
   }
 
-  // TODO (TASK.md, Step 1): draw the marquee rectangle here, above all shapes.
+  if (marquee) {
+    ctx.fillStyle = 'rgba(96, 165, 250, 0.15)'
+    ctx.fillRect(marquee.x, marquee.y, marquee.w, marquee.h)
+    ctx.setLineDash([4, 3])
+    ctx.strokeStyle = '#60a5fa'
+    ctx.lineWidth = 1
+    ctx.strokeRect(marquee.x + 0.5, marquee.y + 0.5, marquee.w, marquee.h)
+    ctx.setLineDash([])
+  }
 }
 
 export function Canvas() {
@@ -72,6 +85,7 @@ export function Canvas() {
   // Subscribe to the slices that affect rendering so the effect below redraws on change.
   const shapes = useEditor((s) => s.shapes)
   const selectedIds = useEditor((s) => s.selectedIds)
+  const marquee = useEditor((s) => s.marquee)
 
   useEffect(() => {
     const canvas = canvasRef.current!
@@ -81,7 +95,7 @@ export function Canvas() {
     const ctx = canvas.getContext('2d')!
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
     draw(ctx)
-  }, [shapes, selectedIds])
+  }, [shapes, selectedIds, marquee])
 
   const toCanvasPoint = (e: ReactPointerEvent<HTMLCanvasElement>): Point => {
     const r = e.currentTarget.getBoundingClientRect()
@@ -99,8 +113,7 @@ export function Canvas() {
       else if (!state.selectedIds.includes(hit.id)) state.setSelection([hit.id])
       gesture.current = { kind: 'drag', last: p, moved: false }
     } else {
-      // TODO (TASK.md, Step 1): start a marquee gesture instead of clearing immediately.
-      if (!e.shiftKey) state.clearSelection()
+      gesture.current = { kind: 'marquee', start: p, additive: e.shiftKey }
     }
   }
 
@@ -109,16 +122,30 @@ export function Canvas() {
     if (!g) return
     const p = toCanvasPoint(e)
     const state = editorStore.getState()
-    if (!g.moved) {
-      g.moved = true
-      state.pushHistory()
+    if (g.kind === 'drag') {
+      if (!g.moved) {
+        g.moved = true
+        state.pushHistory()
+      }
+      state.translate(state.selectedIds, p.x - g.last.x, p.y - g.last.y)
+      g.last = p
+    } else {
+      const rect = normalizeRect(g.start, p)
+      if (state.marquee || rect.w >= MARQUEE_THRESHOLD || rect.h >= MARQUEE_THRESHOLD) {
+        state.setMarquee(rect)
+      }
     }
-    state.translate(state.selectedIds, p.x - g.last.x, p.y - g.last.y)
-    g.last = p
   }
 
-  const onPointerUp = () => {
+  const onPointerUp = (e: ReactPointerEvent<HTMLCanvasElement>) => {
+    const g = gesture.current
     gesture.current = null
+    if (!g) return
+    const state = editorStore.getState()
+    if (g.kind === 'marquee') {
+      if (state.marquee) state.commitMarquee(normalizeRect(g.start, toCanvasPoint(e)), g.additive)
+      else if (!g.additive) state.clearSelection()
+    }
   }
 
   return (

@@ -4,6 +4,13 @@ import { Inspector } from './editor/Inspector'
 import { Toolbar } from './editor/Toolbar'
 import { editorStore } from './editor/store'
 
+const NUDGE: Record<string, [number, number]> = {
+  ArrowLeft: [-1, 0],
+  ArrowRight: [1, 0],
+  ArrowUp: [0, -1],
+  ArrowDown: [0, 1],
+}
+
 function useKeyboardShortcuts() {
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -25,7 +32,13 @@ function useKeyboardShortcuts() {
         return
       }
 
-      // TODO (TASK.md, Step 3): arrow-key nudge.
+      const nudge = NUDGE[e.key]
+      if (nudge && !mod) {
+        if (state.selectedIds.length === 0) return
+        e.preventDefault()
+        const step = e.shiftKey ? 10 : 1
+        state.nudgeSelected(nudge[0] * step, nudge[1] * step)
+      }
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
