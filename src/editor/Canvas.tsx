@@ -3,7 +3,7 @@ import type { PointerEvent as ReactPointerEvent } from 'react'
 import { boundsOf, normalizeRect } from './geometry'
 import { CANVAS_HEIGHT, CANVAS_WIDTH } from './seed'
 import { editorStore, useEditor } from './store'
-import type { Shape } from './types'
+import type { Bounds, Shape } from './types'
 
 type Point = { x: number; y: number }
 
@@ -13,6 +13,9 @@ type Gesture =
 
 /** A marquee only starts once the pointer has moved this far, so plain clicks stay clicks. */
 const MARQUEE_THRESHOLD = 2
+
+const ACCENT = '#60a5fa'
+const GRID = 40
 
 function hitTest(shapes: Shape[], p: Point): Shape | undefined {
   for (let i = shapes.length - 1; i >= 0; i--) {
@@ -28,55 +31,129 @@ function hitTest(shapes: Shape[], p: Point): Shape | undefined {
   return undefined
 }
 
+function shapePath(ctx: CanvasRenderingContext2D, s: Shape) {
+  ctx.beginPath()
+  if (s.kind === 'rect') ctx.roundRect(s.x, s.y, s.w, s.h, 6)
+  else ctx.ellipse(s.x + s.w / 2, s.y + s.h / 2, s.w / 2, s.h / 2, 0, 0, Math.PI * 2)
+}
+
+function drawHandles(ctx: CanvasRenderingContext2D, b: Bounds) {
+  const pts = [
+    [b.x, b.y],
+    [b.x + b.w / 2, b.y],
+    [b.x + b.w, b.y],
+    [b.x, b.y + b.h / 2],
+    [b.x + b.w, b.y + b.h / 2],
+    [b.x, b.y + b.h],
+    [b.x + b.w / 2, b.y + b.h],
+    [b.x + b.w, b.y + b.h],
+  ]
+  ctx.fillStyle = '#ffffff'
+  ctx.strokeStyle = ACCENT
+  ctx.lineWidth = 1.5
+  for (const [x, y] of pts) {
+    ctx.beginPath()
+    ctx.rect(x - 3.5, y - 3.5, 7, 7)
+    ctx.fill()
+    ctx.stroke()
+  }
+}
+
 function draw(ctx: CanvasRenderingContext2D) {
   const { shapes, selectedIds, marquee } = editorStore.getState()
   ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT)
 
-  ctx.strokeStyle = '#2a2f3a'
-  ctx.lineWidth = 1
-  for (let x = 0.5; x < CANVAS_WIDTH; x += 40) {
-    ctx.beginPath()
-    ctx.moveTo(x, 0)
-    ctx.lineTo(x, CANVAS_HEIGHT)
-    ctx.stroke()
-  }
-  for (let y = 0.5; y < CANVAS_HEIGHT; y += 40) {
-    ctx.beginPath()
-    ctx.moveTo(0, y)
-    ctx.lineTo(CANVAS_WIDTH, y)
-    ctx.stroke()
+  // dot grid
+  ctx.fillStyle = '#2b3242'
+  for (let x = GRID; x < CANVAS_WIDTH; x += GRID) {
+    for (let y = GRID; y < CANVAS_HEIGHT; y += GRID) {
+      ctx.fillRect(x - 0.5, y - 0.5, 1.5, 1.5)
+    }
   }
 
+  // shapes
   for (const s of shapes) {
+    ctx.save()
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.45)'
+    ctx.shadowBlur = 18
+    ctx.shadowOffsetY = 6
     ctx.fillStyle = s.fill
-    ctx.beginPath()
-    if (s.kind === 'rect') ctx.rect(s.x, s.y, s.w, s.h)
-    else ctx.ellipse(s.x + s.w / 2, s.y + s.h / 2, s.w / 2, s.h / 2, 0, 0, Math.PI * 2)
+    shapePath(ctx, s)
     ctx.fill()
+    ctx.restore()
+    // subtle inner highlight
+    ctx.save()
+    shapePath(ctx, s)
+    ctx.clip()
+    const g = ctx.createLinearGradient(s.x, s.y, s.x, s.y + s.h)
+    g.addColorStop(0, 'rgba(255,255,255,0.18)')
+    g.addColorStop(1, 'rgba(0,0,0,0.10)')
+    ctx.fillStyle = g
+    ctx.fillRect(s.x, s.y, s.w, s.h)
+    ctx.restore()
   }
 
+  // selection
   const selected = shapes.filter((s) => selectedIds.includes(s.id))
-  ctx.strokeStyle = '#60a5fa'
-  ctx.lineWidth = 2
-  for (const s of selected) ctx.strokeRect(s.x - 1, s.y - 1, s.w + 2, s.h + 2)
-  if (selected.length > 1) {
+  if (selected.length > 0) {
+    ctx.strokeStyle = ACCENT
+    ctx.lineWidth = 1.5
+    for (const s of selected) {
+      ctx.beginPath()
+      ctx.rect(s.x - 1, s.y - 1, s.w + 2, s.h + 2)
+      ctx.stroke()
+    }
     const b = boundsOf(selected)
-    ctx.setLineDash([6, 4])
-    ctx.strokeStyle = '#93c5fd'
-    ctx.lineWidth = 1
-    ctx.strokeRect(b.x - 4, b.y - 4, b.w + 8, b.h + 8)
-    ctx.setLineDash([])
+    if (selected.length > 1) {
+      ctx.setLineDash([6, 4])
+      ctx.strokeStyle = 'rgba(147, 197, 253, 0.9)'
+      ctx.lineWidth = 1
+      ctx.strokeRect(b.x - 6, b.y - 6, b.w + 12, b.h + 12)
+      ctx.setLineDash([])
+      drawHandles(ctx, { x: b.x - 6, y: b.y - 6, w: b.w + 12, h: b.h + 12 })
+    } else {
+      drawHandles(ctx, { x: b.x - 1, y: b.y - 1, w: b.w + 2, h: b.h + 2 })
+    }
+    // size label
+    const label = `${Math.round(b.w)} × ${Math.round(b.h)}`
+    ctx.font = '600 11px Inter, system-ui, sans-serif'
+    const tw = ctx.measureText(label).width + 12
+    const lx = b.x + b.w / 2 - tw / 2
+    const ly = b.y + b.h + 12
+    ctx.fillStyle = ACCENT
+    ctx.beginPath()
+    ctx.roundRect(lx, ly, tw, 18, 4)
+    ctx.fill()
+    ctx.fillStyle = '#0b1220'
+    ctx.textBaseline = 'middle'
+    ctx.fillText(label, lx + 6, ly + 9.5)
   }
 
+  // marquee
   if (marquee) {
     ctx.fillStyle = 'rgba(96, 165, 250, 0.15)'
     ctx.fillRect(marquee.x, marquee.y, marquee.w, marquee.h)
     ctx.setLineDash([4, 3])
-    ctx.strokeStyle = '#60a5fa'
+    ctx.strokeStyle = ACCENT
     ctx.lineWidth = 1
     ctx.strokeRect(marquee.x + 0.5, marquee.y + 0.5, marquee.w, marquee.h)
     ctx.setLineDash([])
   }
+}
+
+function Ruler({ orientation }: { orientation: 'horizontal' | 'vertical' }) {
+  const length = orientation === 'horizontal' ? CANVAS_WIDTH : CANVAS_HEIGHT
+  const marks: number[] = []
+  for (let v = 0; v <= length; v += GRID * 2) marks.push(v)
+  return (
+    <div className={`ruler ${orientation}`} aria-hidden="true">
+      {marks.map((v) => (
+        <span key={v} style={orientation === 'horizontal' ? { left: v } : { top: v }}>
+          {v}
+        </span>
+      ))}
+    </div>
+  )
 }
 
 export function Canvas() {
@@ -149,15 +226,19 @@ export function Canvas() {
   }
 
   return (
-    <canvas
-      ref={canvasRef}
-      data-testid="editor-canvas"
-      className="editor-canvas"
-      style={{ width: CANVAS_WIDTH, height: CANVAS_HEIGHT }}
-      onPointerDown={onPointerDown}
-      onPointerMove={onPointerMove}
-      onPointerUp={onPointerUp}
-      onPointerCancel={onPointerUp}
-    />
+    <div className="artboard" style={{ width: CANVAS_WIDTH + 24, height: CANVAS_HEIGHT + 24 }}>
+      <Ruler orientation="horizontal" />
+      <Ruler orientation="vertical" />
+      <canvas
+        ref={canvasRef}
+        data-testid="editor-canvas"
+        className="editor-canvas"
+        style={{ width: CANVAS_WIDTH, height: CANVAS_HEIGHT }}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
+      />
+    </div>
   )
 }

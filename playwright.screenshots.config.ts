@@ -6,4 +6,5 @@ export default defineConfig({
   ...base,
   testIgnore: [],
   testMatch: /screenshots\.spec\.ts/,
+  use: { ...base.use, deviceScaleFactor: 2 },
 })
