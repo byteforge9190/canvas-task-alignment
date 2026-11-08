@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+    branches: [main, solution]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run typecheck
+      # On `main` the acceptance tests fail by design (they are the task).
+      # On `solution` and on PRs they must pass.
+      - name: Unit tests
+        if: github.ref != 'refs/heads/main'
+        run: npm run test:unit
+      - name: End-to-end tests
+        if: github.ref != 'refs/heads/main'
+        run: npm run test:e2e
+      - name: Upload Playwright traces on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces
+          path: test-results
