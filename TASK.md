@@ -29,9 +29,15 @@ Designers reviewing the editor asked for three things that every layout tool has
 |---|---|
 | ![result](task/assets/02-marquee-result.png) | ![align left](task/assets/03-align-left.png) |
 
-| After **Distribute horizontally** | Toolbar: nothing / 2 / 3 selected |
+| After **Distribute horizontally** | |
 |---|---|
-| ![distribute](task/assets/04-distribute-horizontal.png) | ![t0](task/assets/05-toolbar-nothing-selected.png) ![t2](task/assets/06-toolbar-two-selected.png) ![t3](task/assets/07-toolbar-three-selected.png) |
+| ![distribute](task/assets/04-distribute-horizontal.png) | `r1` and `e1` keep their positions; `r2` moves to `x = 310` so both gaps are 110 px. The inspector shows the selection bounds; the layer list highlights the three selected shapes. |
+
+**Toolbar states** — nothing selected · two selected · three selected. Align buttons enable at two, distribute at three.
+
+![toolbar, nothing selected](task/assets/05-toolbar-nothing-selected.png)
+![toolbar, two selected](task/assets/06-toolbar-two-selected.png)
+![toolbar, three selected](task/assets/07-toolbar-three-selected.png)
 
 ## Files you will touch
 
