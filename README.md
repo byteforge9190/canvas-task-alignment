@@ -1,5 +1,7 @@
 # canvas-task-alignment
 
+[![CI](https://github.com/byteforge9190/canvas-task-alignment/actions/workflows/ci.yml/badge.svg?branch=solution)](https://github.com/byteforge9190/canvas-task-alignment/actions/workflows/ci.yml)
+
 A worked example of a **visually-grounded coding task**: a small React + TypeScript canvas editor, a task specification derived from screenshots of the finished feature, objective success criteria backed by tests, a verification guide for reviewers, and a reference implementation.
 
 I built this to show how I specify and grade frontend work — the kind of task where "it looks right" is not good enough and a reviewer needs to be able to say *pass* or *fail* without guessing.
